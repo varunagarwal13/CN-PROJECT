@@ -1,0 +1,26 @@
+{
+  "name": "netmirage-cyber-range",
+  "version": "1.0.0",
+  "description": "Real-time defensive cyber-range platform with zero-egress sandboxing, passive protocol intelligence, MITRE ATT&CK mapping, and dynamic deception routing",
+  "private": true,
+  "scripts": {
+    "start": "bash app_build/start_netmirage.sh",
+    "start:win": "powershell -ExecutionPolicy Bypass -File app_build/start_netmirage.ps1",
+    "test": "npm run test:backend && npm run test:frontend && npm run test:smoke",
+    "test:backend": "pytest app_build/backend/tests -v",
+    "test:frontend": "cd app_build/frontend && npm test",
+    "test:smoke": "python app_build/backend/tests/live_smoke_test.py",
+    "build:frontend": "cd app_build/frontend && npm run build"
+  },
+  "keywords": [
+    "cyber-range",
+    "honeypot",
+    "zero-egress",
+    "mitre-attack",
+    "deception",
+    "fastapi",
+    "react"
+  ],
+  "author": "NetMirage Team",
+  "license": "UNLICENSED"
+}

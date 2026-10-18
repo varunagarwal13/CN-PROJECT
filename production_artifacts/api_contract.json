@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NetMirage API & WebSocket Contract",
+  "version": "1.0.0",
+  "endpoints": {
+    "GET /api/health": {
+      "response": {
+        "status": "operational",
+        "active_runs": "int",
+        "lab_mode": "zero-egress-emulated",
+        "version": "1.0.0",
+        "egress_guard": "enforced"
+      }
+    },
+    "GET /api/topology": {
+      "query_params": ["run_id"],
+      "response": {
+        "segments": "List[TopologySegment]",
+        "active_lures": "List[ActiveLure]",
+        "highlighted_paths": "List[HighlightedPath]"
+      }
+    },
+    "GET /api/sessions/{session_id}": {
+      "path_params": ["session_id"],
+      "response": "HoneypotSession | List[HoneypotSession]"
+    },
+    "GET /api/runs/{run_id}/sessions": {
+      "path_params": ["run_id"],
+      "response": "List[HoneypotSession]"
+    },
+    "POST /api/runs": {
+      "request_body": {"scenario": "string", "metadata": "object"},
+      "response": "Run"
+    },
+    "POST /api/runs/{run_id}/pause": {
+      "path_params": ["run_id"],
+      "response": "Run (status: paused)"
+    },
+    "POST /api/runs/{run_id}/resume": {
+      "path_params": ["run_id"],
+      "response": "Run (status: running)"
+    },
+    "POST /api/runs/{run_id}/terminate": {
+      "path_params": ["run_id"],
+      "response": "Run (status: terminated)"
+    },
+    "WS /api/runs/{run_id}/events": {
+      "protocol": "websocket",
+      "message_envelope": {
+        "run_id": "string",
+        "event_id": "string",
+        "timestamp": "ISO8601 string",
+        "kind": "detection | action | observation | honeypot | policy | system",
+        "source": "string",
+        "payload": "object"
+      }
+    }
+  }
+}

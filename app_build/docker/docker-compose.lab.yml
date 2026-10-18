@@ -1,0 +1,153 @@
+version: "3.8"
+
+networks:
+  edge_net:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.10.0/24
+          gateway: 10.0.10.1
+
+  ssh_net:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.20.0/24
+          gateway: 10.0.20.1
+
+  web_net:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.30.0/24
+          gateway: 10.0.30.1
+
+  services_net:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.40.0/24
+          gateway: 10.0.40.1
+
+  monitor_net:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.50.0/24
+          gateway: 10.0.50.1
+
+services:
+  edge-gateway:
+    build:
+      context: ./edge-gateway
+      dockerfile: Dockerfile
+    container_name: netmirage-edge-gateway
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    networks:
+      edge_net:
+        ipv4_address: 10.0.10.42
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  cowrie-ssh-lure:
+    build:
+      context: ./cowrie-ssh-lure
+      dockerfile: Dockerfile
+    container_name: netmirage-cowrie-ssh
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    networks:
+      ssh_net:
+        ipv4_address: 10.0.20.10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  web-lure:
+    build:
+      context: ./web-lure
+      dockerfile: Dockerfile
+    container_name: netmirage-web-lure
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    networks:
+      web_net:
+        ipv4_address: 10.0.30.10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  dns-smtp-lure:
+    build:
+      context: ./dns-smtp-lure
+      dockerfile: Dockerfile
+    container_name: netmirage-dns-smtp
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    networks:
+      services_net:
+        ipv4_address: 10.0.40.10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  telemetry-collector:
+    build:
+      context: ./telemetry-collector
+      dockerfile: Dockerfile
+    container_name: netmirage-telemetry-collector
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    networks:
+      monitor_net:
+        ipv4_address: 10.0.50.10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M

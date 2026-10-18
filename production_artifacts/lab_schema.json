@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NetMirage Lab Topology Specification",
+  "version": "1.0.0",
+  "zero_egress_enforced": true,
+  "subnets": [
+    {
+      "name": "edge_net",
+      "cidr": "10.0.10.0/24",
+      "gateway": "10.0.10.1",
+      "internal": true,
+      "nodes": [
+        {"name": "edge-gateway", "ip": "10.0.10.42", "services": [80, 8080]}
+      ]
+    },
+    {
+      "name": "ssh_net",
+      "cidr": "10.0.20.0/24",
+      "gateway": "10.0.20.1",
+      "internal": true,
+      "nodes": [
+        {"name": "cowrie-ssh-lure", "ip": "10.0.20.10", "services": [22, 2222]}
+      ]
+    },
+    {
+      "name": "web_net",
+      "cidr": "10.0.30.0/24",
+      "gateway": "10.0.30.1",
+      "internal": true,
+      "nodes": [
+        {"name": "web-lure", "ip": "10.0.30.10", "services": [80, 8080]}
+      ]
+    },
+    {
+      "name": "services_net",
+      "cidr": "10.0.40.0/24",
+      "gateway": "10.0.40.1",
+      "internal": true,
+      "nodes": [
+        {"name": "dns-lure", "ip": "10.0.40.10", "services": [53]},
+        {"name": "smtp-lure", "ip": "10.0.40.20", "services": [25, 587]}
+      ]
+    },
+    {
+      "name": "monitor_net",
+      "cidr": "10.0.50.0/24",
+      "gateway": "10.0.50.1",
+      "internal": true,
+      "nodes": [
+        {"name": "telemetry-collector", "ip": "10.0.50.10", "services": [8080]}
+      ]
+    }
+  ],
+  "security_invariants": {
+    "network_mode_host_allowed": false,
+    "privileged_mode_allowed": false,
+    "cap_drop": ["ALL"],
+    "no_new_privileges": true,
+    "read_only_rootfs": true
+  }
+}

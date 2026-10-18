@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: #111827;
+  }
+  body {
+    background-color: #FAF5E9;
+    color: #111827;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/* Swiss Industrial Dot-Matrix Schematic Canvas */
+.bg-dot-matrix {
+  background-image: radial-gradient(#111827 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Sharp Technical Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF5E9;
+  border-left: 1px solid #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #009B4D;
+}
+
