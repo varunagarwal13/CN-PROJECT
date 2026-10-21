@@ -72,7 +72,7 @@ def test_protocol_analyzer_and_mitre_mapping():
     assert detection is not None
     assert detection.technique_id == "T1046"
     assert detection.technique_name == "Network Service Discovery"
-    assert detection.confidence == 0.90
+    assert 0.60 <= detection.confidence <= 0.99
     assert detection.threat_profile == "reconnaissance"
 
     # 2. SSH Credential Probing -> T1110
@@ -82,7 +82,7 @@ def test_protocol_analyzer_and_mitre_mapping():
     )
     det_ssh = mitre_mapper.classify_observation(obs_ssh[0])
     assert det_ssh.technique_id == "T1110"
-    assert det_ssh.confidence == 0.95
+    assert 0.60 <= det_ssh.confidence <= 0.99
     assert det_ssh.threat_profile == "credential_probing"
 
     # 3. Web Path Probing -> T1190

@@ -51,17 +51,27 @@ services:
     build:
       context: ./edge-gateway
       dockerfile: Dockerfile
-    container_name: netmirage-edge-gateway
+    container_name: netmirage-edge
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
     tmpfs:
       - /tmp:rw,noexec,nosuid
     networks:
       edge_net:
         ipv4_address: 10.0.10.42
+      ssh_net:
+        ipv4_address: 10.0.20.254
+      web_net:
+        ipv4_address: 10.0.30.254
+      services_net:
+        ipv4_address: 10.0.40.254
+      monitor_net:
+        ipv4_address: 10.0.50.254
     deploy:
       resources:
         limits:
@@ -72,17 +82,22 @@ services:
     build:
       context: ./cowrie-ssh-lure
       dockerfile: Dockerfile
-    container_name: netmirage-cowrie-ssh
+    container_name: netmirage-ssh-lure
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
     tmpfs:
       - /tmp:rw,noexec,nosuid
     networks:
       ssh_net:
         ipv4_address: 10.0.20.10
+    ports:
+      - "22:22"
+      - "2222:2222"
     deploy:
       resources:
         limits:
@@ -98,12 +113,17 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
     tmpfs:
       - /tmp:rw,noexec,nosuid
     networks:
       web_net:
         ipv4_address: 10.0.30.10
+    ports:
+      - "80:80"
+      - "8080:8080"
     deploy:
       resources:
         limits:
@@ -114,17 +134,24 @@ services:
     build:
       context: ./dns-smtp-lure
       dockerfile: Dockerfile
-    container_name: netmirage-dns-smtp
+    container_name: netmirage-services-lure
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
     tmpfs:
       - /tmp:rw,noexec,nosuid
     networks:
       services_net:
         ipv4_address: 10.0.40.10
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      - "25:25"
+      - "2525:2525"
     deploy:
       resources:
         limits:
@@ -135,12 +162,14 @@ services:
     build:
       context: ./telemetry-collector
       dockerfile: Dockerfile
-    container_name: netmirage-telemetry-collector
+    container_name: netmirage-telemetry
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: false
     tmpfs:
       - /tmp:rw,noexec,nosuid
     networks:

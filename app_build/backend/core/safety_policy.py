@@ -1,7 +1,8 @@
 import ipaddress
 import time
+import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from app_build.backend.config import settings
@@ -17,7 +18,11 @@ ALLOWLISTED_ACTIONS = {
     "inspect_session_output",
 }
 
-DEFAULT_PORTS = {22, 2222, 53, 80, 8080, 25, 587}
+DEFAULT_PORTS = {22, 2222, 53, 80, 8080, 25, 2525, 587}
+DANGEROUS_PATTERNS = [
+    r";", r"\|", r"&&", r"\$\(", r"`", r">\s*/", r"<\s*/",
+    r"rm\s+-rf", r"whoami", r"\bnc\s+", r"/bin/sh", r"/bin/bash"
+]
 
 @dataclass
 class PolicyResult:
@@ -26,22 +31,34 @@ class PolicyResult:
     reason: str
 
 class SafetyPolicyEngine:
-    def __init__(self):
-        # Parse CIDRs
-        cidr_strs = [c.strip() for c in settings.ALLOWED_LAB_CIDRS.split(",") if c.strip()]
-        self.allowed_networks = [ipaddress.ip_network(c) for c in cidr_strs]
+    def __init__(self, allowed_cidrs: Optional[str] = None, allowed_ports: Optional[str] = None):
+        # Fail-closed CIDR initialization
+        raw_cidrs = settings.ALLOWED_LAB_CIDRS if allowed_cidrs is None else allowed_cidrs
+        cidr_strs = [c.strip() for c in raw_cidrs.split(",") if c.strip()]
+        self.allowed_networks = []
+        for c in cidr_strs:
+            try:
+                self.allowed_networks.append(ipaddress.ip_network(c))
+            except Exception:
+                pass  # Ignore invalid, fail closed
 
-        # Parse ports
-        port_strs = [p.strip() for p in settings.ALLOWED_LAB_PORTS.split(",") if p.strip()]
-        self.allowed_ports = {int(p) for p in port_strs} if port_strs else DEFAULT_PORTS
+        # Fail-closed Port initialization
+        raw_ports = settings.ALLOWED_LAB_PORTS if allowed_ports is None else allowed_ports
+        port_strs = [p.strip() for p in raw_ports.split(",") if p.strip()]
+        self.allowed_ports: Set[int] = set()
+        for p in port_strs:
+            try:
+                self.allowed_ports.add(int(p))
+            except Exception:
+                pass
 
         # In-memory tracking for rate limits and concurrency
-        # run_id -> list of float timestamps
         self._action_timestamps: Dict[str, List[float]] = {}
-        # run_id -> active concurrent action count
         self._active_concurrency: Dict[str, int] = {}
 
     def is_ip_in_lab(self, ip_str: str) -> bool:
+        if not self.allowed_networks:
+            return False
         try:
             ip = ipaddress.ip_address(ip_str.strip())
             return any(ip in net for net in self.allowed_networks)
@@ -49,13 +66,14 @@ class SafetyPolicyEngine:
             return False
 
     def is_port_allowed(self, port: int) -> bool:
+        if not self.allowed_ports:
+            return False
         return port in self.allowed_ports
 
     def check_rate_limit(self, run_id: str) -> bool:
         now = time.time()
         window = 60.0  # 1 minute
         history = self._action_timestamps.get(run_id, [])
-        # Prune older than 60s
         recent = [t for t in history if now - t < window]
         self._action_timestamps[run_id] = recent
         if len(recent) >= settings.MAX_ACTIONS_PER_MINUTE:
@@ -88,13 +106,25 @@ class SafetyPolicyEngine:
             return False, "network_mode: host is strictly forbidden"
         return True, None
 
+    def validate_parameters(self, params: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
+        """Scans parameters to reject arbitrary command injection strings."""
+        if not params:
+            return True, None
+        for key, val in params.items():
+            str_val = str(val)
+            for pat in DANGEROUS_PATTERNS:
+                if re.search(pat, str_val, re.IGNORECASE):
+                    return False, f"Command injection or shell metacharacter '{pat}' detected in parameter '{key}'."
+        return True, None
+
     def evaluate_action(
         self,
         run_id: str,
         action_type: str,
         target_ip: str,
         target_port: int,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        parameters: Optional[Dict[str, Any]] = None
     ) -> PolicyResult:
         """
         Fail-closed policy evaluation for proposed AI agent actions.
@@ -149,7 +179,16 @@ class SafetyPolicyEngine:
                 reason=f"Destination port '{target_port}' is not in registered lab ports."
             )
 
-        # 6. Rate limit check
+        # 6. Parameter command injection check
+        params_ok, err_msg = self.validate_parameters(parameters)
+        if not params_ok:
+            return PolicyResult(
+                allowed=False,
+                status="denied",
+                reason=err_msg or "Command injection attempt detected."
+            )
+
+        # 7. Rate limit check
         if not self.check_rate_limit(run_id):
             return PolicyResult(
                 allowed=False,
@@ -157,7 +196,7 @@ class SafetyPolicyEngine:
                 reason=f"Rate limit exceeded: max {settings.MAX_ACTIONS_PER_MINUTE} actions/min."
             )
 
-        # 7. Concurrency cap check
+        # 8. Concurrency cap check
         if not self.acquire_concurrency(run_id):
             return PolicyResult(
                 allowed=False,

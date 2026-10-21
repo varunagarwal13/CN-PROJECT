@@ -4,12 +4,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app_build.backend.db import get_db, SessionLocal
 from app_build.backend import models, schemas
 from app_build.backend.event_bus import event_bus
 from app_build.backend.orchestration.lab_runner import lab_runner
 from app_build.backend.intel.honeypots import redact_credentials
+from app_build.backend.core.lab_services import lab_services
+from app_build.backend.intel.pcap_exporter import generate_pcap_from_actions, PCAP_OUTPUT_PATH
 
 router = APIRouter(prefix="/api")
 
@@ -186,6 +189,8 @@ async def create_run(payload: Optional[schemas.RunCreate] = None, db: Session = 
     db.commit()
     db.refresh(new_run)
 
+    # Boot real Docker Compose lab virtual networks
+    asyncio.create_task(asyncio.to_thread(lab_services.start_docker_lab))
     lab_runner.start_run(run_id)
 
     return new_run
@@ -225,6 +230,8 @@ async def terminate_run(run_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(run)
     lab_runner.terminate_run(run_id)
+    # Tear down Docker Compose lab virtual networks
+    asyncio.create_task(asyncio.to_thread(lab_services.stop_docker_lab))
     return run
 
 @router.get("/runs/{run_id}/actions", response_model=List[schemas.AgentActionResponse])
@@ -260,6 +267,45 @@ def get_run_sessions(run_id: str, db: Session = Depends(get_db)):
         }
         for s in sessions
     ]
+
+@router.get("/runs/{run_id}/pcap")
+def download_run_pcap(run_id: str, db: Session = Depends(get_db)):
+    from app_build.backend.intel.pcap_exporter import LATEST_PCAP_PATH
+    if run_id == "latest":
+        return download_latest_pcap()
+    actions = db.query(models.AgentAction).filter(models.AgentAction.run_id == run_id).order_by(models.AgentAction.timestamp.asc()).all()
+    actions_dict = [
+        {
+            "action_type": a.action_type,
+            "target_ip": a.target_ip,
+            "target_port": a.target_port,
+            "parameters": a.parameters,
+            "output": a.output
+        }
+        for a in actions
+    ]
+    pcap_path = generate_pcap_from_actions(actions_dict, run_id=run_id)
+    return FileResponse(
+        path=pcap_path,
+        media_type="application/vnd.tcpdump.pcap",
+        filename=f"netmirage_{run_id}.pcap"
+    )
+
+@router.get("/pcap/latest")
+def download_latest_pcap():
+    from app_build.backend.intel.pcap_exporter import LATEST_PCAP_PATH
+    if not LATEST_PCAP_PATH.exists():
+        generate_pcap_from_actions([
+            {"action_type": "discover_lab_services", "target_ip": "10.0.10.42", "target_port": 80},
+            {"action_type": "resolve_dns", "target_ip": "10.0.40.10", "target_port": 53, "parameters": {"query": "ssh.corp.internal"}},
+            {"action_type": "request_http", "target_ip": "10.0.30.10", "target_port": 80, "parameters": {"path": "/admin/login"}},
+            {"action_type": "attempt_ssh_to_lure", "target_ip": "10.0.20.10", "target_port": 22}
+        ], run_id="latest")
+    return FileResponse(
+        path=str(LATEST_PCAP_PATH),
+        media_type="application/vnd.tcpdump.pcap",
+        filename="netmirage_latest_run.pcap"
+    )
 
 @router.websocket("/runs/{run_id}/events")
 async def websocket_events(websocket: WebSocket, run_id: str, db: Session = Depends(get_db)):

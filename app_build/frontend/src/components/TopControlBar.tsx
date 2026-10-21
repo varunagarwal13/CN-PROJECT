@@ -154,6 +154,18 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
 
       {/* Industrial Tactile Switch Buttons */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            const runId = currentRun?.id || 'latest';
+            window.open(`http://localhost:8000/api/runs/${runId}/pcap`, '_blank');
+          }}
+          className="px-2.5 py-1 text-xs font-mono font-bold bg-[#FAF5E9] text-[#111827] border border-[#111827] shadow-[2px_2px_0px_#111827] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-none cursor-pointer tracking-wider flex items-center gap-1 hover:bg-[#FFCC00]"
+          title="Download Wireshark .pcap packet capture for this run"
+        >
+          <span>⬇</span>
+          <span>DOWNLOAD .PCAP</span>
+        </button>
+
         {(!currentRun || status === 'pending' || status === 'completed' || status === 'terminated') ? (
           <button
             onClick={onStartRun}

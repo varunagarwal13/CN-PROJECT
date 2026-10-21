@@ -12,6 +12,7 @@ from app_build.backend.intel.deception_policy import deception_policy
 from app_build.backend.event_bus import event_bus
 from app_build.backend.db import SessionLocal
 from app_build.backend import models
+from app_build.backend.intel.pcap_exporter import generate_pcap_from_actions
 
 class LabRunner:
     def __init__(self):
@@ -131,7 +132,8 @@ class LabRunner:
                     action_type=action_plan.action_type,
                     target_ip=action_plan.target_ip,
                     target_port=action_plan.target_port,
-                    db=db
+                    db=db,
+                    parameters=action_plan.parameters
                 )
                 db.close()
 
@@ -161,7 +163,7 @@ class LabRunner:
                     parameters=action_plan.parameters
                 )
 
-                self._prior_actions[run_id].append({
+                action_record = {
                     "action_id": action_id,
                     "action_type": action_plan.action_type,
                     "target_ip": action_plan.target_ip,
@@ -169,7 +171,14 @@ class LabRunner:
                     "status": broker_res["status"],
                     "latency_ms": broker_res["latency_ms"],
                     "output": broker_res["output"]
-                })
+                }
+                self._prior_actions[run_id].append(action_record)
+
+                # Live standard Wireshark PCAP capture update
+                try:
+                    generate_pcap_from_actions(self._prior_actions[run_id], run_id=run_id)
+                except Exception as pcap_err:
+                    print(f"[LAB-RUNNER] PCAP write error: {pcap_err}")
 
                 await event_bus.emit(
                     run_id=run_id,
@@ -254,10 +263,22 @@ class LabRunner:
                         payload=obs
                     )
 
-                    # 8. MITRE ATT&CK Mapping
-                    detection = mitre_mapper.classify_observation(obs)
+                    # 8. MITRE ATT&CK Mapping (with Dynamic Confidence Calculation)
+                    detection = mitre_mapper.classify_observation(obs, run_id=run_id)
                     if detection:
-                        cumulative_threat_score = min(100, cumulative_threat_score + int(detection.confidence * 25))
+                        # Dynamic weighted threat scoring
+                        SEVERITY_WEIGHTS = {
+                            "T1110": 30.0,
+                            "T1021.004": 25.0,
+                            "T1557": 25.0,
+                            "T1071.004": 20.0,
+                            "T1190": 20.0,
+                            "T1046": 15.0,
+                            "T1595": 15.0,
+                            "T1095": 15.0
+                        }
+                        weight = SEVERITY_WEIGHTS.get(detection.technique_id, 15.0)
+                        cumulative_threat_score = min(100, cumulative_threat_score + int(detection.confidence * weight * 0.8))
                         det_id = f"det_{uuid.uuid4().hex[:8]}"
 
                         await event_bus.emit(
